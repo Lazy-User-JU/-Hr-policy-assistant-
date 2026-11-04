@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR Policy Assistant</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px 16px; color: #1c2024; background: #fff; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  form { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 10px; font: inherit; border: 1px solid #b8bec6; border-radius: 6px; }
+  button { padding: 10px 16px; font: inherit; border: 0; border-radius: 6px; background: #245a8f; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; }
+  .answer { margin-top: 16px; padding: 14px; border-left: 4px solid #2f7d4f; background: #f3f8f5; white-space: pre-wrap; }
+  .answer.refused { border-color: #a8701b; background: #fbf6ec; }
+  .answer.error { border-color: #b23b3b; background: #fbefef; }
+  .citation { margin-top: 8px; font-size: 14px; color: #4a525b; white-space: normal; }
+  .citation blockquote { margin: 2px 0 0 10px; }
+  details { margin-top: 28px; border-top: 1px solid #e1e4e8; padding-top: 12px; }
+  summary { cursor: pointer; font-weight: 600; }
+  ul { padding-left: 20px; font-size: 14px; }
+  .row { margin-top: 10px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <h1>HR Policy Assistant</h1>
+
+  <form id="ask-form">
+    <input type="text" id="question" aria-label="Your question" placeholder="Ask about leave, benefits or IT rules">
+    <button id="ask-button">Ask</button>
+  </form>
+  <div id="result"></div>
+
+  <details>
+    <summary>Admin: manage policies</summary>
+    <form id="upload-form" class="row">
+      <input type="file" id="file" accept=".md,.markdown,.txt,.pdf">
+      <button>Upload</button>
+    </form>
+    <p id="upload-status"></p>
+    <h2>Live documents</h2>
+    <ul id="documents"></ul>
+  </details>
+
+<script>
+const result = document.getElementById("result");
+
+function showError(message) {
+  result.replaceChildren();
+  const box = document.createElement("div");
+  box.className = "answer error";
+  box.textContent = message;
+  result.append(box);
+}
+
+function errorText(body, fallback) {
+  if (typeof body.detail === "string") return body.detail;
+  if (Array.isArray(body.detail)) return body.detail[0].msg.replace("Value error, ", "");
+  return fallback;
+}
+
+function showAnswer(data) {
+  const box = document.createElement("div");
+  box.className = "answer " + data.status;
+  box.textContent = data.answer;
+  for (const citation of data.citations) {
+    const line = document.createElement("div");
+    line.className = "citation";
+    const place = [citation.document + " (v" + citation.version + ")", citation.section].filter(Boolean);
+    line.textContent = place.join(" · ");
+    const quote = document.createElement("blockquote");
+    quote.textContent = citation.quote;
+    line.append(quote);
+    box.append(line);
+  }
+  result.replaceChildren(box);
+}
+
+document.getElementById("ask-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = document.getElementById("ask-button");
+  button.disabled = true;
+  try {
+    const response = await fetch("/ask", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question: document.getElementById("question").value}),
+    });
+    const body = await response.json();
+    if (response.ok) showAnswer(body);
+    else showError(errorText(body, "Something went wrong."));
+  } catch {
+    showError("Could not reach the server.");
+  }
+  button.disabled = false;
+});
+
+async function loadDocuments() {
+  const response = await fetch("/documents");
+  const items = (await response.json()).map((doc) => {
+    const item = document.createElement("li");
+    item.textContent = `${doc.name} (v${doc.version}, ${doc.chunks} chunks)`;
+    return item;
+  });
+  document.getElementById("documents").replaceChildren(...items);
+}
+
+document.getElementById("upload-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = document.getElementById("upload-status");
+  const file = document.getElementById("file").files[0];
+  if (!file) { status.textContent = "Choose a file first."; return; }
+  const form = new FormData();
+  form.append("file", file);
+  status.textContent = "Uploading...";
+  const response = await fetch("/documents", {method: "POST", headers: {"X-Role": "admin"}, body: form});
+  const body = await response.json();
+  status.textContent = response.ok
+    ? `${body.document}: ${body.status}, version ${body.version}, ${body.chunks} chunks`
+    : errorText(body, "Upload failed.");
+  loadDocuments();
+});
+
+loadDocuments();
+</script>
+</body>
+</html>
