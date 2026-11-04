@@ -162,10 +162,11 @@ def test_off_topic_question_is_refused_before_the_llm(monkeypatch):
 
 
 class FakeResponse:
-    def __init__(self, content="", status_code=200):
+    def __init__(self, content="", status_code=200, headers=None):
         self.content = content
         self.status_code = status_code
         self.text = content
+        self.headers = headers or {}
 
     def json(self):
         return {"choices": [{"message": {"content": self.content}}]}
@@ -214,6 +215,27 @@ def test_rate_limit_that_never_clears_raises(monkeypatch):
     monkeypatch.setattr(llm.time, "sleep", lambda seconds: None)
     with pytest.raises(llm.LLMError):
         llm.ask("Days?", hits())
+
+
+def test_short_retry_hint_is_waited_out(monkeypatch):
+    replies = [FakeResponse("Please retry in 20.5s.", status_code=429), FakeResponse(GOOD_JSON)]
+    waits = []
+    monkeypatch.setattr(requests, "post", lambda *a, **k: replies.pop(0))
+    monkeypatch.setattr(llm.time, "sleep", waits.append)
+    assert llm.ask("Days?", hits()).answer == "8 days."
+    assert waits == [20.5]
+
+
+def test_daily_quota_fails_fast_and_answer_falls_back(monkeypatch):
+    index("leave.md", POLICY)
+    monkeypatch.setattr(config, "LLM_API_KEY", "key")
+    calls = []
+    monkeypatch.setattr(requests, "post", lambda *a, **k: calls.append(1) or FakeResponse("Please retry in 13h12m52.7s.", status_code=429))
+    monkeypatch.setattr(llm.time, "sleep", lambda seconds: pytest.fail("should not wait for a daily quota"))
+    with pytest.raises(llm.QuotaExhausted):
+        llm.ask("Days?", hits())
+    assert len(calls) == 1
+    assert answer_question("How many days of casual leave may be carried forward?").answered_by == "extractive"
 
 
 def test_provider_that_rejects_schemas_is_retried_without_one(monkeypatch):

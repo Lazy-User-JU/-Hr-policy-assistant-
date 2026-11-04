@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 
 import requests
@@ -46,10 +47,27 @@ REPLY_SCHEMA = {
 
 RETRY_WAITS_SECONDS = (2, 6)
 RETRY_STATUS_CODES = {429, 500, 503}
+MAX_RETRY_WAIT_SECONDS = 60
+RETRY_HINT = re.compile(r'(?:retry in |"retryDelay": ")(?:(\d+)h)?(?:(\d+)m)?([\d.]+)s', re.IGNORECASE)
 
 
 class LLMError(Exception):
     pass
+
+
+class QuotaExhausted(LLMError):
+    """The provider says to come back later than is worth waiting, e.g. a daily free-tier quota."""
+
+
+def retry_hint_seconds(response: requests.Response) -> float:
+    header = response.headers.get("Retry-After", "") if getattr(response, "headers", None) else ""
+    if header.replace(".", "", 1).isdigit():
+        return float(header)
+    match = RETRY_HINT.search(response.text or "")
+    if not match:
+        return 0.0
+    hours, minutes, seconds = match.groups()
+    return int(hours or 0) * 3600 + int(minutes or 0) * 60 + float(seconds)
 
 
 def enabled() -> bool:
@@ -71,6 +89,9 @@ def post(payload: dict) -> requests.Response:
         response = requests.post(url, json=payload, headers=headers, timeout=config.LLM_TIMEOUT_SECONDS)
         if response.status_code not in RETRY_STATUS_CODES or wait is None:
             return response
+        wait = max(wait, retry_hint_seconds(response))
+        if wait > MAX_RETRY_WAIT_SECONDS:
+            raise QuotaExhausted(f"HTTP {response.status_code} quota exhausted (retry in {wait / 3600:.1f}h)")
         time.sleep(wait)
 
 

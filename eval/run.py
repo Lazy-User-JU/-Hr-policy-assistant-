@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
-from app import config, store
+from app import config, llm, store
 from app.answer import answer_question
 from app.ingest import index_document
 from app.retrieval import retrieve
@@ -157,6 +157,18 @@ def compare(questions: list[dict]) -> None:
         print(f"{mode:<10} {sum(r is not None for r in ranks)}/{len(ranks):<23} {mrr:.2f}")
 
 
+def stop_when_quota_runs_out(ask):
+    def wrapper(*args, **kwargs):
+        try:
+            return ask(*args, **kwargs)
+        except llm.QuotaExhausted as error:
+            # Scoring the extractive fallback as if it were the LLM would make the results misleading.
+            print(f"\n\nStopping: {error}. Wait for the quota to reset, use a paid key, or run with --no-llm.", file=sys.stderr)
+            raise SystemExit(2) from error
+
+    return wrapper
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-llm", action="store_true")
@@ -168,6 +180,7 @@ def main() -> int:
 
     if args.no_llm:
         config.LLM_API_KEY = ""
+    llm.ask = stop_when_quota_runs_out(llm.ask)
     print(f"Setup: {setup_name()}\n")
 
     questions = json.loads((ROOT / "eval" / "questions.json").read_text(encoding="utf-8"))
