@@ -226,6 +226,10 @@ def test_short_retry_hint_is_waited_out(monkeypatch):
     assert waits == [20.5]
 
 
+def test_groq_retry_hint_is_read(monkeypatch):
+    assert llm.retry_hint_seconds(FakeResponse("Rate limit reached. Please try again in 1m30.5s.", status_code=429)) == 90.5
+
+
 def test_daily_quota_fails_fast_and_answer_falls_back(monkeypatch):
     index("leave.md", POLICY)
     monkeypatch.setattr(config, "LLM_API_KEY", "key")
@@ -236,6 +240,16 @@ def test_daily_quota_fails_fast_and_answer_falls_back(monkeypatch):
         llm.ask("Days?", hits())
     assert len(calls) == 1
     assert answer_question("How many days of casual leave may be carried forward?").answered_by == "extractive"
+
+
+def test_setup_check_warns_but_passes_when_quota_is_exhausted(monkeypatch, capsys):
+    from app import check
+
+    monkeypatch.setattr(config, "LLM_API_KEY", "key")
+    monkeypatch.setattr(requests, "post", lambda *a, **k: FakeResponse("Please retry in 3h48m0s.", status_code=429))
+    assert check.check_llm() is True
+    output = capsys.readouterr().out
+    assert "warn  LLM" in output and "FAIL" not in output
 
 
 def test_provider_that_rejects_schemas_is_retried_without_one(monkeypatch):

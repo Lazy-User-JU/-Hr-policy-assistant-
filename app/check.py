@@ -42,6 +42,11 @@ def check_llm() -> bool:
     print(f"...   LLM: calling {config.LLM_MODEL}")
     try:
         reply = llm.ask(SAMPLE_QUESTION, [SAMPLE_HIT])
+    except llm.QuotaExhausted as error:
+        print(f"warn  LLM: {error}")
+        print("      Your key and model were accepted. Until the quota resets, answers will be exact quotes.")
+        print("      To use the LLM sooner, switch to another key, a paid tier, or a model with its own quota.")
+        return True
     except llm.LLMError as error:
         print(f"FAIL  LLM: {error}")
         print("      Check LLM_API_KEY, and check LLM_MODEL against your provider's current model list.")

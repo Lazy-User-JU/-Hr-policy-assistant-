@@ -39,16 +39,18 @@ REPLY_SCHEMA = {
                 "type": "object",
                 "properties": {"excerpt": {"type": "integer"}, "quote": {"type": "string"}},
                 "required": ["excerpt", "quote"],
+                "additionalProperties": False,
             },
         },
     },
     "required": ["answerable", "answer", "evidence"],
+    "additionalProperties": False,
 }
 
 RETRY_WAITS_SECONDS = (2, 6)
 RETRY_STATUS_CODES = {429, 500, 503}
 MAX_RETRY_WAIT_SECONDS = 60
-RETRY_HINT = re.compile(r'(?:retry in |"retryDelay": ")(?:(\d+)h)?(?:(\d+)m)?([\d.]+)s', re.IGNORECASE)
+RETRY_HINT = re.compile(r'(?:retry in |try again in |"retryDelay": ")(?:(\d+)h)?(?:(\d+)m)?([\d.]+)s', re.IGNORECASE)
 
 
 class LLMError(Exception):
@@ -101,7 +103,7 @@ def ask(question: str, hits: list[dict]) -> ModelReply:
         "temperature": 0,
         "response_format": {
             "type": "json_schema",
-            "json_schema": {"name": "policy_answer", "schema": REPLY_SCHEMA},
+            "json_schema": {"name": "policy_answer", "strict": True, "schema": REPLY_SCHEMA},
         },
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},

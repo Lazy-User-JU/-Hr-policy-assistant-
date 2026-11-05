@@ -14,7 +14,7 @@ chunking.py   section chunks, table rows  retrieval.py  rank fusion, top 6
    |                                         |
 embeddings.py MiniLM vectors              gate: is retrieval weak? --yes--> refuse
    |                                         | no
-store.py      SQLite, one transaction     llm.py  Gemini, JSON schema reply
+store.py      SQLite, one transaction     llm.py  Groq, JSON schema reply 
                                              |    (failure --> quote-only answer)
                                           answer.py  check quotes and numbers
                                              |                 |

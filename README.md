@@ -6,7 +6,7 @@ The design and its trade-offs are in [DESIGN.md](DESIGN.md).
 
 ## Run it locally
 
-You need Python 3.10 or newer. Python 3.11 or 3.12 is the safest choice for PyTorch. The only key you need is a free Gemini key from Google AI Studio.
+You need Python 3.10 or newer. Python 3.11 or 3.12 is the safest choice for PyTorch. The only key you need is a free Groq API key from https://console.groq.com/keys.
 
 ```bash
 python -m venv .venv
@@ -18,7 +18,7 @@ cp .env.example .env             # Windows: copy .env.example .env
 Paste your key into `LLM_API_KEY` in `.env`, then run:
 
 ```bash
-python -m app.check              # checks the database, embeddings and Gemini
+python -m app.check              # checks the database, embeddings and Groq
 python -m app.seed               # loads the three sample policies
 uvicorn app.main:app --reload
 ```
@@ -38,12 +38,12 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 | Part | Default | Cost |
 | --- | --- | --- |
 | Embeddings | `all-MiniLM-L6-v2` with sentence-transformers, running locally | Free, no key |
-| Answers | Gemini by default, through its OpenAI-compatible API | Free tier |
+| Answers | Groq (`openai/gpt-oss-120b`) by default, through its OpenAI-compatible API | Free tier |
 | No key set | Exact quotes from the policy, no LLM call | Free |
 
-Ollama is optional. `.env.example` also has settings for Groq and Ollama. Models and quotas change, so check your provider's current list.
+Ollama is optional. Any OpenAI-compatible endpoint works, including Gemini, OpenAI and Ollama: change `LLM_BASE_URL` and `LLM_MODEL`. Models and quotas change, so check your provider's current list.
 
-Gemini's free tier may use prompts to improve Google products outside some regions, so do not upload real confidential policies while using it.
+Check your provider's data-retention terms before uploading real confidential policies.
 
 Rate limits are retried twice. If the LLM still fails, the service falls back to quoting. The `answered_by` field in each response shows which path was used.
 
@@ -52,8 +52,8 @@ Rate limits are retried twice. If the LLM still fails, the service falls back to
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `LLM_API_KEY` | empty | Turns on the LLM. Empty means quote-only mode. |
-| `LLM_BASE_URL` | Gemini | OpenAI-compatible endpoint |
-| `LLM_MODEL` | `gemini-3.6-flash` | Chat model |
+| `LLM_BASE_URL` | Groq | OpenAI-compatible endpoint |
+| `LLM_MODEL` | `openai/gpt-oss-120b` | Chat model |
 | `LLM_TIMEOUT_SECONDS` | `30` | Time allowed before falling back to quoting |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Any sentence-transformers model, or `hashing` for no download |
 | `DB_PATH` | `data/hr.db` | SQLite file |
